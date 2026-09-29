@@ -1,0 +1,11 @@
+flowchart TD
+    A["callback entered, AC cleared<br/>by user_access_save()"] --> B{"in_task(), not pagefault_disabled(),<br/>session enabled, guard bit 31 clear ?"}
+    B -->|"no"| Z["nothing recorded"]
+    B -->|"yes"| D["set the guard, then reserve<br/>3 + nvals words"]
+    D -->|"buffer full"| Y["clear the guard, return"]
+    D -->|"reserved"| E["write header, pc, address word"]
+    E --> F{"num_fields == 0 ?"}
+    F -->|"yes"| G["one value word;<br/>nothing is dereferenced"]
+    F -->|"no"| H["per field: copy_from_kernel_nofault(),<br/>a failed read becomes 0xBADADD85"]
+    G --> Y
+    H --> Y

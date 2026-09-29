@@ -1,0 +1,15 @@
+flowchart TD
+    subgraph LLVM["LLVM, 5 patches"]
+      direction TB
+      L1["1/5 instrumentation<br/>92883bfc4b9d"] --> L2["2/5 Clang options<br/>0c231e7232d2"]
+      L2 --> L3["3/5 compiler-rt runtime<br/>afc1d858b4c0"]
+      L3 --> L4["4/5 libFuzzer value profile<br/>44b57bb9b1bc"]
+      L4 --> L5["5/5 documentation<br/>9633fb05d16b"]
+    end
+    subgraph LNX["Linux, 8 patches"]
+      direction TB
+      K1["1/8 kcov_dataflow<br/>c6a7606ee965"] --> K2["2/8 Documentation<br/>1c040ce64762"]
+      K2 --> K3["3/8 .. 7/8 selftest modules"]
+      K3 --> K8["8/8 trigger-view.py<br/>1daba192bb59"]
+    end
+    L1 -.->|"callbacks the kernel consumes"| K1

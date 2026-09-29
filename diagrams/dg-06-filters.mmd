@@ -1,0 +1,8 @@
+flowchart TD
+    A["#dbg_value record<br/>naming a parameter"] --> B{"from an inlined callee,<br/>or a #dbg_declare ?"}
+    B -->|"yes"| X1["ignored: not a description of<br/>this function's incoming value"]
+    B -->|"no"| D{"a complex DIExpression<br/>rather than the value itself ?"}
+    D -->|"yes"| X1
+    D -->|"no"| E{"poison, or defined where it<br/>would not dominate the call ?"}
+    E -->|"yes"| X2["parameter still reported,<br/>with size 0"]
+    E -->|"no"| G["value reported at arg_idx =<br/>DILocalVariable::getArg() - 1"]

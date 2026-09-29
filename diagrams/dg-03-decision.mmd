@@ -1,0 +1,8 @@
+flowchart TD
+    A["callback received"] --> B{"size == 0 ?"}
+    B -->|"yes"| C["nothing was reported<br/>(dead parameter, void return,<br/>unreportable type)"]
+    B -->|"no"| D{"num_fields == 0 ?"}
+    D -->|"yes"| E["val IS the value<br/>low size bytes, zero-extended<br/>no memory is touched"]
+    D -->|"no"| F["val is the ADDRESS<br/>of a size-byte object"]
+    F --> G["offsets = num_fields pairs<br/>of byte offset, byte size"]
+    G --> H["consumer decides whether<br/>it may read the object"]

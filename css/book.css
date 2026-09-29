@@ -1,0 +1,885 @@
+/*
+ * Function-Boundary Value Coverage -- print/screen stylesheet for Vivliostyle
+ *
+ * Targets Vivliostyle Core 2.45+ (CSS Paged Media, generated content,
+ * target-counter(), footnotes, cascade layers).
+ *
+ * SPDX-License-Identifier: CC0-1.0
+ */
+
+@layer reset, tokens, text, blocks, structure, frontmatter, paged;
+
+/* ------------------------------------------------------------------ */
+@layer tokens {
+  :root {
+    /* palette */
+    --ink: #16191d;
+    --ink-soft: #4a5158;
+    --rule: #ccd2d8;
+    --accent: #0b4f6c;
+    --accent-soft: #e8f0f4;
+    --code-bg: #f5f6f7;
+    --code-ink: #1d2126;
+    --warn: #8a3b00;
+    --warn-bg: #fdf3ea;
+
+    /* type */
+    --serif: Charter, "Bitstream Charter", "Source Serif 4",
+      "Source Serif Pro", Georgia, "Liberation Serif", "Nimbus Roman",
+      "Times New Roman", serif;
+    --sans: "Source Sans 3", "Source Sans Pro", Inter, "Helvetica Neue",
+      Arial, "Liberation Sans", sans-serif;
+    --mono: "DejaVu Sans Mono", "Liberation Mono", "SFMono-Regular", Menlo,
+      Consolas, "Courier New", monospace;
+
+    --measure: 34em;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+@layer reset {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+@layer text {
+  html {
+    font-family: var(--serif);
+    color: var(--ink);
+  }
+  body {
+    font-size: 10.4pt;
+    line-height: 1.5;
+    text-align: justify;
+    hyphens: auto;
+    orphans: 2;
+    widows: 2;
+  }
+
+  p {
+    margin: 0 0 0.7em 0;
+  }
+  p + p {
+    /* no extra space; indentation carries the paragraph break in print */
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    font-family: var(--sans);
+    font-weight: 600;
+    line-height: 1.22;
+    text-align: left;
+    hyphens: none;
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  h2 {
+    font-size: 1.9em;
+    color: var(--accent);
+    margin: 0 0 1.6em 0;
+  }
+  h3 {
+    font-size: 1.28em;
+    margin: 2em 0 0.5em 0;
+  }
+  h4 {
+    font-size: 1.05em;
+    margin: 1.5em 0 0.35em 0;
+  }
+  h5 {
+    font-size: 1em;
+    font-style: italic;
+    font-weight: 500;
+    margin: 1.2em 0 0.3em 0;
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  abbr {
+    text-decoration: none;
+  }
+  strong {
+    font-weight: 600;
+  }
+  em {
+    font-style: italic;
+  }
+
+  ul,
+  ol {
+    margin: 0 0 0.8em 0;
+    padding-left: 1.5em;
+  }
+  li {
+    margin-bottom: 0.25em;
+  }
+  li > p:last-child {
+    margin-bottom: 0.3em;
+  }
+
+  dl {
+    margin: 0 0 0.9em 0;
+  }
+  dt {
+    font-family: var(--sans);
+    font-size: 0.92em;
+    font-weight: 600;
+    margin-top: 0.6em;
+  }
+  dd {
+    margin: 0 0 0.3em 1.4em;
+  }
+
+  code,
+  kbd,
+  samp {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    hyphens: none;
+  }
+  p code,
+  li code,
+  dd code,
+  dt code,
+  td code,
+  th code,
+  figcaption code {
+    background: var(--code-bg);
+    padding: 0 0.15em;
+    border-radius: 2px;
+    word-break: break-word;
+  }
+
+  /* opening paragraph of a chapter: slightly larger, no small-caps lead
+     (::first-line + small-caps splits hyphenated words mid-effect) */
+  .lead {
+    font-size: 1.04em;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+@layer blocks {
+  /* ---- code listings ---- */
+  /* Sized so that 80 columns of monospace fit: the listings hang 4 mm
+     into the outer margins on each side to buy the extra width. */
+  pre {
+    font-family: var(--mono);
+    font-size: 7.8pt;
+    line-height: 1.4;
+    tab-size: 4;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    border-left: 2.5px solid var(--accent);
+    margin: 0.9em -4mm;
+    padding: 0.55em 0.6em;
+    text-align: left;
+    hyphens: none;
+    orphans: 3;
+    widows: 3;
+  }
+  pre code {
+    font-size: inherit;
+    background: none;
+    padding: 0;
+  }
+  /* shell transcripts */
+  pre.shell {
+    border-left-color: #555;
+    background: #f7f7f5;
+  }
+  /* raw data dumps */
+  pre.data {
+    border-left-color: var(--ink-soft);
+  }
+
+  /* ---- numbered listings / figures / tables ---- */
+  figure {
+    margin: 1.1em 0;
+    break-inside: avoid;
+  }
+  figure.listing {
+    break-inside: auto;
+  }
+  figure > figcaption {
+    font-family: var(--sans);
+    font-size: 0.8em;
+    line-height: 1.35;
+    color: var(--ink-soft);
+    text-align: left;
+    margin-top: 0.35em;
+    break-before: avoid;
+  }
+  figure.listing > figcaption {
+    margin-top: 0.3em;
+  }
+  figure.diagram > pre {
+    background: #fff;
+    border-left: none;
+    border: 1px solid var(--rule);
+    font-size: 7.4pt;
+    line-height: 1.32;
+  }
+
+  /* ---- image plates ---- */
+  /* The four figures carry their own typeset caption inside the image, so
+     they get no figcaption and take no figure counter. */
+  figure.plate {
+    margin: 1.2em -4mm;
+    text-align: center;
+    break-inside: avoid;
+  }
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+  /* Mermaid diagrams, pre-rendered to SVG. The height cap keeps a tall
+     flowchart on one page; the browser scales the width to match. */
+  figure.diagram {
+    margin: 1.1em -4mm;
+    text-align: center;
+  }
+  figure.diagram > img {
+    max-width: 100%;
+    max-height: 165mm;
+  }
+  figure.diagram > figcaption {
+    text-align: left;
+  }
+
+  /* ---- tables ---- */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.85em;
+    margin: 0.4em 0;
+    font-family: var(--sans);
+  }
+  caption {
+    caption-side: bottom;
+    font-family: var(--sans);
+    font-size: 0.78em;
+    color: var(--ink-soft);
+    text-align: left;
+    margin-top: 0.35em;
+  }
+  th,
+  td {
+    border-top: 0.5px solid var(--rule);
+    border-bottom: 0.5px solid var(--rule);
+    padding: 0.25em 0.45em;
+    text-align: left;
+    vertical-align: top;
+    hyphens: none;
+  }
+  thead th {
+    border-bottom: 1px solid var(--ink-soft);
+    font-weight: 600;
+  }
+  table.compact td,
+  table.compact th {
+    font-size: 0.95em;
+  }
+  td.num,
+  th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  td code,
+  th code {
+    font-size: 0.92em;
+    /* break-word rather than anywhere: `anywhere` lets the auto table layout
+       shrink a column to one character, which splits identifiers such as
+       KCOV_DF_REMOTE_DISABLE across lines. break-word keeps the word's width
+       in the min-content calculation, so the column is sized to hold it. */
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+
+  /* ---- admonitions ---- */
+  aside.note,
+  aside.warn,
+  aside.detail {
+    font-size: 0.9em;
+    line-height: 1.42;
+    margin: 1em 0;
+    padding: 0.5em 0.75em;
+    border-left: 2.5px solid var(--accent);
+    background: var(--accent-soft);
+    break-inside: avoid;
+  }
+  aside.warn {
+    border-left-color: var(--warn);
+    background: var(--warn-bg);
+  }
+  aside.detail {
+    border-left-color: var(--ink-soft);
+    background: #f4f4f2;
+  }
+  aside.note > p:last-child,
+  aside.warn > p:last-child,
+  aside.detail > p:last-child {
+    margin-bottom: 0;
+  }
+  aside > .label {
+    font-family: var(--sans);
+    font-size: 0.85em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.2em;
+  }
+  aside.warn > .label {
+    color: var(--warn);
+  }
+  aside.detail > .label {
+    color: var(--ink-soft);
+  }
+
+  /* ---- commit links ---- */
+  /* The SHA stays the visible text, so the citation still works on paper. */
+  a.commit {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 0.4px dotted var(--accent);
+  }
+  a.commit code {
+    color: inherit;
+    background: none;
+    padding: 0;
+  }
+
+  /* ---- source-location annotation ---- */
+  .src {
+    font-family: var(--mono);
+    font-size: 0.8em;
+    color: var(--ink-soft);
+  }
+
+  blockquote {
+    margin: 0.9em 0 0.9em 1.2em;
+    padding-left: 0.8em;
+    border-left: 2px solid var(--rule);
+    color: var(--ink-soft);
+    font-size: 0.95em;
+  }
+  blockquote cite {
+    display: block;
+    font-family: var(--sans);
+    font-size: 0.85em;
+    font-style: normal;
+    margin-top: 0.3em;
+  }
+
+  hr {
+    border: none;
+    border-top: 0.5px solid var(--rule);
+    margin: 1.4em auto;
+    width: 30%;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+@layer structure {
+  /* chapter / section numbering */
+  body {
+    counter-reset: chapter appendix;
+  }
+  section.chapter {
+    counter-increment: chapter;
+    counter-reset: section listing table-n figure-n;
+    break-before: page;
+    break-before: recto;
+  }
+  section.chapter > h2::before {
+    content: counter(chapter) "\2002";
+    color: var(--ink-soft);
+  }
+  section.chapter > section {
+    counter-increment: section;
+    counter-reset: subsection;
+  }
+  section.chapter > section > h3::before {
+    content: counter(chapter) "." counter(section) "\2002";
+    color: var(--ink-soft);
+  }
+  section.chapter > section > section {
+    counter-increment: subsection;
+  }
+  section.chapter > section > section > h4::before {
+    content: counter(chapter) "." counter(section) "." counter(subsection)
+      "\2002";
+    color: var(--ink-soft);
+  }
+
+  /* appendices */
+  section.appendix {
+    counter-increment: appendix;
+    counter-reset: section listing table-n figure-n;
+    break-before: page;
+    break-before: recto;
+  }
+  section.appendix > h2::before {
+    content: "Appendix " counter(appendix, upper-alpha) "\2002";
+    color: var(--ink-soft);
+  }
+  section.appendix > section {
+    counter-increment: section;
+  }
+  section.appendix > section > h3::before {
+    content: counter(appendix, upper-alpha) "." counter(section) "\2002";
+    color: var(--ink-soft);
+  }
+
+  /* listing / table / figure numbering */
+  figure.listing {
+    counter-increment: listing;
+  }
+  figure.listing > figcaption::before {
+    content: "Listing " counter(chapter) "." counter(listing) ". ";
+    font-weight: 600;
+    color: var(--ink);
+  }
+  section.appendix figure.listing > figcaption::before {
+    content: "Listing " counter(appendix, upper-alpha) "." counter(listing)
+      ". ";
+  }
+  figure.diagram {
+    counter-increment: figure-n;
+  }
+  /* "Diagram", not "Figure": the four raster plates carry their own baked-in
+     "Figure N" captions, so the two schemes must not collide. */
+  figure.diagram > figcaption::before {
+    content: "Diagram " counter(chapter) "." counter(figure-n) ". ";
+    font-weight: 600;
+    color: var(--ink);
+  }
+  section.appendix figure.diagram > figcaption::before {
+    content: "Diagram " counter(appendix, upper-alpha) "." counter(figure-n)
+      ". ";
+  }
+  figure.tabular {
+    counter-increment: table-n;
+    break-inside: auto;
+  }
+  figure.tabular > figcaption::before {
+    content: "Table " counter(chapter) "." counter(table-n) ". ";
+    font-weight: 600;
+    color: var(--ink);
+  }
+  section.appendix figure.tabular > figcaption::before {
+    content: "Table " counter(appendix, upper-alpha) "." counter(table-n)
+      ". ";
+  }
+
+  /* running-head strings */
+  section.chapter > h2 {
+    string-set: chaptertitle counter(chapter) "\2002" content(text);
+  }
+  section.appendix > h2 {
+    string-set: chaptertitle "Appendix " counter(appendix, upper-alpha)
+      "\2002" content(text);
+  }
+  section.frontmatter > h2,
+  section.backmatter > h2 {
+    string-set: chaptertitle content(text);
+  }
+
+  /* cross references */
+  a.xref::after {
+    content: " (p." target-counter(attr(href), page) ")";
+    font-size: 0.85em;
+    color: var(--ink-soft);
+  }
+
+  /* footnotes */
+  .fn {
+    float: footnote;
+    font-size: 0.82rem;
+    line-height: 1.35;
+    text-align: left;
+    hyphens: none;
+  }
+  .fn::footnote-call {
+    font-size: 0.75em;
+    vertical-align: super;
+    line-height: 0;
+  }
+  .fn::footnote-marker {
+    font-family: var(--sans);
+    font-size: 0.8em;
+    color: var(--ink-soft);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+@layer frontmatter {
+  /* screen-only banner pointing readers at the paged viewer */
+  .viewer-banner {
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    background: var(--accent);
+    color: #fff;
+    padding: 0.6em 1em;
+    text-align: center;
+  }
+  .viewer-banner a {
+    color: #fff;
+    text-decoration: underline;
+  }
+
+  /* title page */
+  section.titlepage {
+    page: titlepage;
+    text-align: center;
+    break-after: page;
+  }
+  section.titlepage h1 {
+    font-family: var(--sans);
+    font-size: 2.9em;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--accent);
+    margin: 0 0 0.25em 0;
+    text-align: center;
+  }
+  section.titlepage .subtitle {
+    font-family: var(--sans);
+    font-size: 1.15em;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin: 0 0 3em 0;
+    text-align: center;
+    hyphens: none;
+  }
+  section.titlepage .rule {
+    border: none;
+    border-top: 2px solid var(--accent);
+    width: 4em;
+    margin: 1.4em auto 1.8em auto;
+  }
+  section.titlepage .byline {
+    font-family: var(--sans);
+    font-size: 1.25em;
+    font-weight: 600;
+    text-align: center;
+    margin: 0 0 0.15em 0;
+  }
+  section.titlepage .contact {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    color: var(--ink-soft);
+    text-align: center;
+    margin: 0 0 2.2em 0;
+  }
+  section.titlepage .contact a {
+    color: var(--ink-soft);
+  }
+  section.titlepage .tagline {
+    font-family: var(--sans);
+    font-size: 0.95em;
+    font-style: italic;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-bottom: 0.4em;
+  }
+  section.titlepage .basis {
+    font-family: var(--mono);
+    font-size: 0.82em;
+    color: var(--ink-soft);
+    text-align: center;
+  }
+
+  /* colophon-ish metadata block */
+  [role="contentinfo"] {
+    font-size: 0.92em;
+  }
+  [role="contentinfo"] dl {
+    display: block;
+  }
+
+  /* prologue signature */
+  p.signature {
+    margin-top: 1.8em;
+    text-align: right;
+    font-family: var(--sans);
+    font-size: 0.95em;
+    line-height: 1.5;
+  }
+
+  /* front- and back-matter sections each start a fresh page; the prologue
+     and afterword get a recto opening like a chapter */
+  section.frontmatter,
+  section.backmatter {
+    break-before: page;
+  }
+  section#prologue,
+  section#preface,
+  section#afterword {
+    break-before: page;
+    break-before: recto;
+  }
+
+  /* abstract */
+  .abstract {
+    font-size: 0.97em;
+    border-top: 0.5px solid var(--rule);
+    border-bottom: 0.5px solid var(--rule);
+    padding: 0.8em 0;
+    margin: 1.2em 0;
+  }
+  .abstract > .label {
+    font-family: var(--sans);
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.3em;
+  }
+
+  /* table of contents */
+  nav[role="doc-toc"] ol {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+  nav[role="doc-toc"] > ol {
+    counter-reset: toc-chapter;
+  }
+  nav[role="doc-toc"] li {
+    margin: 0;
+  }
+  nav[role="doc-toc"] a {
+    font-family: var(--sans);
+    display: block;
+    text-align: left;
+    text-decoration: none;
+    color: var(--ink);
+  }
+  nav[role="doc-toc"] > ol > li {
+    counter-increment: toc-chapter;
+    margin-top: 0.55em;
+  }
+  nav[role="doc-toc"] > ol > li > a {
+    font-size: 0.98em;
+    font-weight: 600;
+  }
+  nav[role="doc-toc"] > ol > li > a::before {
+    content: counter(toc-chapter) "\2002";
+    color: var(--ink-soft);
+  }
+  nav[role="doc-toc"] > ol > li.app,
+  nav[role="doc-toc"] > ol > li.front {
+    counter-increment: none;
+  }
+  nav[role="doc-toc"] > ol > li.app > a::before,
+  nav[role="doc-toc"] > ol > li.front > a::before {
+    content: none;
+  }
+  nav[role="doc-toc"] ol ol {
+    margin: 0.1em 0 0 1.5em;
+    counter-reset: toc-section;
+  }
+  nav[role="doc-toc"] ol ol > li {
+    counter-increment: toc-section;
+  }
+  nav[role="doc-toc"] ol ol > li > a {
+    font-size: 0.86em;
+    color: var(--ink-soft);
+  }
+  nav[role="doc-toc"] ol ol > li > a::before {
+    content: counter(toc-chapter) "." counter(toc-section) "\2002";
+  }
+  nav[role="doc-toc"] a::after {
+    content: leader(". ") target-counter(attr(href), page);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+
+  /* colophon */
+  section.colophon {
+    page: colophon;
+    font-size: 0.9em;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Paged media. Deliberately NOT inside a cascade layer: unlayered
+   declarations win over layered ones, and it keeps the page context out
+   of a nested at-rule. Margin boxes repeat their font and colour
+   literally rather than via var(), because the page context does not
+   reliably inherit custom properties across engines. */
+@page {
+    size: 182mm 257mm; /* JIS B5 */
+    margin: 22mm 26mm 20mm 26mm;
+
+    /* Uncomment for a printer-ready PDF with bleed and crop marks:
+    bleed: 3mm;
+    marks: crop cross;
+    */
+
+    @bottom-center {
+      content: counter(page);
+      font-family: "Source Sans 3", "Source Sans Pro", Inter, Arial,
+        "Liberation Sans", sans-serif;
+      font-size: 0.8rem;
+      color: #4a5158;
+      vertical-align: top;
+      padding-top: 6mm;
+    }
+
+    @footnote {
+      border-top: 0.5px solid #ccd2d8;
+      padding-top: 0.3em;
+      margin-top: 0.8em;
+      margin-left: 0;
+      max-height: 45%;
+    }
+  }
+
+  /* running heads: book title on verso, chapter title on recto */
+  @page :left {
+    @top-left {
+      content: "Function-Boundary Value Coverage";
+      font-family: "Source Sans 3", "Source Sans Pro", Inter, Arial,
+        "Liberation Sans", sans-serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #4a5158;
+      vertical-align: bottom;
+      padding-bottom: 5mm;
+    }
+  }
+  @page :right {
+    @top-right {
+      content: string(chaptertitle);
+      font-family: "Source Sans 3", "Source Sans Pro", Inter, Arial,
+        "Liberation Sans", sans-serif;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      color: #4a5158;
+      vertical-align: bottom;
+      padding-bottom: 5mm;
+      text-align: right;
+    }
+  }
+
+  /* Named pages. Front matter and body use the default page; the title
+     page and colophon get their own so they can drop the running heads.
+     Chapter-opening pages keep the running head: Vivliostyle applies
+     neither `@page chapter:first` nor `:nth(1)` to the first page of each
+     named-page run, so there is no supported way to suppress it here. */
+  section.chapter,
+  section.appendix,
+  section.frontmatter,
+  section.backmatter {
+    page: auto;
+  }
+
+  @page titlepage {
+    margin: 45mm 26mm 20mm 26mm;
+    @top-left {
+      content: none;
+    }
+    @top-right {
+      content: none;
+    }
+    @bottom-center {
+      content: none;
+    }
+  }
+  @page colophon {
+    @top-left {
+      content: none;
+    }
+    @top-right {
+      content: none;
+    }
+  }
+  @page :first {
+    @top-left {
+      content: none;
+    }
+    @top-right {
+      content: none;
+    }
+    @bottom-center {
+      content: none;
+    }
+  }
+  @page :blank {
+    @top-left {
+      content: none;
+    }
+    @top-right {
+      content: none;
+    }
+    @bottom-center {
+      content: none;
+    }
+  }
+
+  /* hide the screen banner when paginated or printed */
+  @media print {
+    .viewer-banner {
+      display: none;
+    }
+  }
+
+/* ------------------------------------------------------------------ */
+/* Plain-scroll (non-paginated) reading in a normal browser.          */
+@media screen {
+  body {
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding: 0 1.2em 6em 1.2em;
+    font-size: 11.5pt;
+  }
+  .viewer-banner {
+    margin: 0 -1.2em 2em -1.2em;
+  }
+  nav[role="doc-toc"] a::after {
+    content: none;
+  }
+  a.xref::after {
+    content: none;
+  }
+  .fn {
+    float: none;
+    display: block;
+    font-size: 0.85em;
+    color: var(--ink-soft);
+    border-left: 2px solid var(--rule);
+    padding-left: 0.7em;
+    margin: 0.6em 0;
+  }
+  section.titlepage h1 {
+    font-size: 2.2em;
+  }
+  pre {
+    font-size: 9pt;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  figure.diagram > pre {
+    font-size: 8.5pt;
+  }
+}

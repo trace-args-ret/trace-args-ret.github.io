@@ -1,0 +1,14 @@
+flowchart TD
+    SRC["C / C++ / Rust source"] --> CL["Clang / rustc<br/>-fsanitize-coverage=trace-args,trace-ret"]
+    CL --> P["SanitizerCoverage pass"]
+    P --> CB1["__sanitizer_cov_trace_args()"]
+    P --> CB2["__sanitizer_cov_trace_ret()"]
+    CB1 --> KD["kernel: kcov_dataflow"]
+    CB2 --> KD
+    CB1 --> CR["compiler-rt: weak empty default"]
+    CB2 --> CR
+    CR --> LF["libFuzzer: ValueProfileMap"]
+    CR --> OWN["your own strong definition"]
+    KD --> KB["per-task ARG / RET / CMP<br/>records, mmap()"]
+    KB --> KF["kernel fuzzer or analyser"]
+    LF --> UF["userspace fuzzing"]

@@ -1,0 +1,10 @@
+flowchart LR
+    subgraph NOT["Not attempted"]
+      direction LR
+      I["Fuzzer input byte"] -.-> T1["parse"] -.-> T2["shift, mask"] -.-> T3["struct field"]
+    end
+    subgraph YES["Observed"]
+      direction LR
+      C1["Caller"] -->|"argument values"| F["Function"]
+      F -->|"returned value"| C2["Caller"]
+    end

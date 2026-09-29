@@ -1,0 +1,6 @@
+flowchart TD
+    A["trace_args"] --> S["one per-task stream,<br/>ordered by a 24-bit sequence"]
+    B["trace_cmp"] --> S
+    C["trace_ret"] --> S
+    S --> R["seq 100  ENTRY  foo  arg0 = A<br/>seq 101  ENTRY  foo  arg1 = B<br/>seq 102  CMP    B vs 0<br/>seq 103  ENTRY  bar  arg0 = B<br/>seq 104  RET    bar  = C<br/>seq 105  RET    foo  = D"]
+    R --> U["fuzzer or analyser"]

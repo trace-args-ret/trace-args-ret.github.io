@@ -1,0 +1,10 @@
+flowchart TD
+    E["function entry block"] --> A0["trace_args(arg 0)"]
+    A0 --> A1["trace_args(arg 1)"]
+    A1 --> BR{"branch"}
+    BR --> B1["basic block A"]
+    BR --> B2["basic block B"]
+    B1 --> R1["trace_ret(...)<br/>ret"]
+    B2 --> R2["trace_ret(...)<br/>ret"]
+    B2 --> MT["musttail call<br/>ret forwarding it"]
+    MT --> NI["not instrumented:<br/>call and ret must stay adjacent"]

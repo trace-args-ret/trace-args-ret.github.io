@@ -1,0 +1,17 @@
+# Local reference checkout of the Vivliostyle sources (~359 MB, and an
+# embedded git repository).  It is only here to read the CSS samples and the
+# CHANGELOG; it must never be committed or published.
+vivliostyle.js/
+
+# Symlink to the local LLVM + Linux reference trees the book was written
+# against.  Read-only, enormous, and must never be committed or published.
+llvm-project
+
+# Local build scratch
+node_modules/
+*.log
+*.pdf
+
+# preview staging dir
+.preview/
+.vivliostyle/

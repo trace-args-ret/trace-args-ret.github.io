@@ -1,0 +1,10 @@
+flowchart TD
+    S["struct Big foo(int mode)"] --> FE["frontend"]
+    FE --> IR["define void @foo(<br/>ptr sret(%struct.Big) %result,<br/>i32 %mode)"]
+    FE --> DBG["DILocalVariable 'mode'<br/>getArg() == 1"]
+    IR --> P0["IR argument 0 = %result<br/>hidden, no source index"]
+    IR --> P1["IR argument 1 = %mode"]
+    DBG --> MAP["arg_idx = 0"]
+    P1 --> MAP
+    MAP --> CB["trace_args(foo, arg_idx 0, ...)"]
+    P0 --> RET["trace_ret reports the<br/>caller-provided sret buffer"]

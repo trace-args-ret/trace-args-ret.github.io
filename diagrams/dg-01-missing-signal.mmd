@@ -1,0 +1,9 @@
+flowchart TD
+    IA["Input A"] --> FA["foo(len = 16)"]
+    IB["Input B"] --> FB["foo(len = 4096)"]
+    FA --> BB1["entry block"]
+    FB --> BB1
+    BB1 --> BB2["memcpy path"]
+    BB2 --> EX["return"]
+    EX --> EDGE["Edge coverage:<br/>one edge set,<br/>two identical inputs"]
+    EX --> VAL["Value observation:<br/>len = 16 and len = 4096<br/>are different"]

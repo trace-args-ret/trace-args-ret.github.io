@@ -1,0 +1,20 @@
+stateDiagram-v2
+    [*] --> Opened : open(/sys/kernel/debug/kcov_dataflow)
+    Opened --> Initialised : KCOV_DF_INIT_TRACK(words)
+    Initialised --> Mapped : mmap(size * 8)
+    Mapped --> Local : KCOV_DF_ENABLE
+    Local --> Mapped : KCOV_DF_DISABLE
+    Mapped --> Published : KCOV_DF_REMOTE_ENABLE(&handle)
+    Published --> Mapped : KCOV_DF_REMOTE_DISABLE
+    Local --> [*] : task exit / close
+    Mapped --> [*] : close
+    Published --> [*] : close
+    note right of Local
+      exactly one writer:
+      plain area[0] update
+    end note
+    note right of Published
+      many kworkers:
+      private scratch, then
+      atomic cmpxchg merge
+    end note

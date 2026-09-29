@@ -1,0 +1,8 @@
+flowchart TD
+    A["a struct crosses the boundary"] --> B{"does an object for it<br/>already exist in memory ?"}
+    B -->|"pointer to struct,<br/>byval, sret buffer"| C["report its address"]
+    C --> D["one callback,<br/>num_fields = field count,<br/>offsets = shared layout table"]
+    D --> E["consumer reads<br/>field 0 .. field N-1"]
+    B -->|"ABI put it in registers"| F["there is no address"]
+    F --> G["one callback per register piece,<br/>all with the same arg_idx,<br/>num_fields = 0"]
+    G --> H["field values are observed<br/>but not split along<br/>source field boundaries"]

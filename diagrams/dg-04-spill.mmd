@@ -1,0 +1,8 @@
+flowchart TD
+    A["a value the ABI put in a register"] --> B["report the value itself"]
+    B --> B2["no alloca, nothing escapes,<br/>no frame is realigned:<br/>target-independent"]
+    A --> C["spill it to an alloca and<br/>report the slot address"]
+    C --> D["the slot escapes, so (K)ASan<br/>adds a redzone and<br/>32-byte alignment"]
+    D --> F["the frame is realigned, so the<br/>backend reserves a base pointer"]
+    F --> H["on x86-64 that register is RBX"]
+    H --> I["a function whose inline asm also<br/>claims RBX then fails to build:<br/>'Interference usage of base<br/>pointer/frame pointer'"]

@@ -1,0 +1,14 @@
+flowchart TD
+    subgraph LOC["Local session"]
+      T["traced task"] --> W1["kcov_df_reserve()<br/>READ_ONCE / WRITE_ONCE<br/>on area[0]"]
+      W1 --> AR["mmap'd area"]
+    end
+    subgraph REM["Remote session"]
+      K1["kworker A"] --> S1["scratch A<br/>1 MiB words"]
+      K2["kworker B"] --> S2["scratch B<br/>1 MiB words"]
+      S1 --> M["kcov_df_merge()<br/>atomic64_try_cmpxchg<br/>on area[0]"]
+      S2 --> M
+      M --> AR2["mmap'd area"]
+    end
+    AR --> U["userspace consumer"]
+    AR2 --> U

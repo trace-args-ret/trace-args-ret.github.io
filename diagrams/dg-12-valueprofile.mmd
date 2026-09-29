@@ -1,0 +1,11 @@
+flowchart TD
+    A["trace_args, Loc = arg_idx"] --> H["TracePC::HandleDataflow()"]
+    B["trace_ret, Loc = 0xFFFF"] --> H
+    H --> C{"Size == 0 ?"}
+    C -->|"yes"| D["no feature"]
+    C -->|"no"| E{"NumFields and Offsets<br/>both present ?"}
+    E -->|"no"| F["Fold(field 0, Val)"]
+    E -->|"yes"| G["at most 32 fields:<br/>Fold(field I + 1, value)"]
+    F --> I["ValueProfileMap.AddValueModPrime(<br/>(PC * 3 + Loc) ^ (Field * 0x9E3779B1) ^ V)"]
+    G --> I
+    I --> J["a value never seen at that site<br/>is a new feature under<br/>-use_value_profile=1"]
