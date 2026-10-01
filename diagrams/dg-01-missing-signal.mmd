@@ -1,9 +1,10 @@
 flowchart TD
-    IA["Input A"] --> FA["foo(len = 16)"]
-    IB["Input B"] --> FB["foo(len = 4096)"]
-    FA --> BB1["entry block"]
-    FB --> BB1
-    BB1 --> BB2["memcpy path"]
-    BB2 --> EX["return"]
-    EX --> EDGE["Edge coverage:<br/>one edge set,<br/>two identical inputs"]
-    EX --> VAL["Value observation:<br/>len = 16 and len = 4096<br/>are different"]
+    A["SMB2_WRITE (A)<br/>Offset = 0, Length = 16"] --> W
+    B["SMB2_WRITE (B)<br/>Offset = 0, Length = 4096"] --> W
+    W["smb2_write()<br/>offset and length are read from the request"]
+    W --> C1["offset + length vs SMB2_MAX_FILE_SIZE,<br/>length vs max_write_size (4 MiB),<br/>DataOffset bounds:<br/>every check takes the same branch"]
+    C1 --> VW["ksmbd_vfs_write(buf, count = length,<br/>pos = address of offset, sync, written)"]
+    VW --> C2["daccess gate, stream check, lock-range check,<br/>level II oplock break:<br/>the same branch again"]
+    C2 --> KW["kernel_write(filp, buf, count, pos)"]
+    KW --> E["Edge coverage:<br/>one edge set for both requests,<br/>so B is discarded as uninteresting"]
+    KW --> V["Value observation at the boundary:<br/>count = 16 and count = 4096<br/>are two distinct observations"]

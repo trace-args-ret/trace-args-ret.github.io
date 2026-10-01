@@ -423,46 +423,83 @@
         <h3>Two inputs, one edge set</h3>
 
         <p>
-          Consider a function whose behaviour depends on a length that it never
-          compares against a constant &mdash; it passes the length on, and the
-          decision that matters happens three frames down, or in an allocator,
-          or in hardware. Two inputs drive it with 16 and with 4096. Both take
-          the same branch at every conditional in the function. To edge
-          coverage those two executions are the same execution.
+          Take the file-write path of the kernel's SMB2 server. Two clients send
+          an <code>SMB2_WRITE</code> on the same handle, at the same
+          <code>Offset</code>, differing only in <code>Length</code>: sixteen
+          bytes and four kilobytes. Follow both through
+          <code>smb2_write()</code> and then
+          <code>ksmbd_vfs_write()</code> and they take the same branch at every
+          conditional &mdash; the file-size bound, the
+          <code>max_write_size</code> limit, the <code>DataOffset</code>
+          validation, the access gate, the lock-range check &mdash; and arrive
+          at <code>kernel_write()</code> having exercised one identical edge
+          set. To edge coverage the two executions are the same execution.
         </p>
 
         <figure class="diagram">
           <img
             src="img/dg-01-missing-signal.svg"
-            alt="Two inputs reaching the same function with different argument
-                 values produce one identical edge set, while value
-                 observation distinguishes them."
+            alt="Two SMB2_WRITE requests at the same offset differing only in
+                 Length, 16 and 4096, walk the same path through smb2_write()
+                 and ksmbd_vfs_write() to kernel_write(), taking the same
+                 branch at every bounds check, access gate and lock-range
+                 check; edge coverage sees one edge set and discards the second
+                 request, while observing the count argument distinguishes
+                 them."
           />
           <figcaption>
-            The same control flow, twice. Edge coverage reports one new edge
-            set for the first input and nothing for the second; a fuzzer with
-            no other signal discards the second input.
+            The same control flow, twice. The length is never compared against
+            anything that would separate 16 from 4096; it is bounds-checked once
+            and then handed down as the <code>count</code> argument, and what it
+            actually decides happens below <code>kernel_write()</code> &mdash;
+            in the page cache, the allocator and the filesystem's own write
+            path.
+            <span class="src"
+              >fs/smb/server/smb2pdu.c, fs/smb/server/vfs.c</span
+            >
+          </figcaption>
+        </figure>
+
+        <p>
+          The value is not discarded along the way, which is what makes the
+          example worth following. It survives as an ordinary argument through
+          two frames and into the VFS, and the only thing ksmbd does to it on
+          the way is reject it if it is too large:
+        </p>
+
+        <figure class="listing">
+          <pre><code>		err = ksmbd_vfs_write(work, fp, data_buf, length, &amp;offset,
+				      writethrough, &amp;nbytes);
+	/* ... two frames down, in ksmbd_vfs_write() ... */
+	err = kernel_write(filp, buf, count, pos);</code></pre>
+          <figcaption>
+            The length reaching the VFS as <code>count</code>. Both requests
+            execute both of these lines; only the value differs.
+            <span class="src"
+              >fs/smb/server/smb2pdu.c:9664, fs/smb/server/vfs.c:509</span
+            >
           </figcaption>
         </figure>
 
         <p>
           This is not a contrived case. It is the normal shape of a kernel
-          interface. A syscall takes a flags word, a size, a file descriptor,
-          a pointer to a structure the caller filled in; the code that validates
+          interface. A request carries a flags word, a size, a disposition, a
+          pointer to a structure the caller filled in; the code that validates
           those is small and gets covered immediately, and the code that is
           <em>interesting</em> is downstream of a value that has already been
-          accepted. The fuzzer's corpus converges on a set of inputs that
-          collectively cover every edge, and then stops rewarding anything,
+          accepted &mdash; sometimes several frames down, sometimes in a later
+          request entirely. The fuzzer's corpus converges on a set of inputs
+          that collectively cover every edge, and then stops rewarding anything,
           because from its point of view there is nothing left to discover.
         </p>
 
         <p>
           What a fuzzer needs in order to keep going is a reason to say: this
-          input reached <code>foo()</code> with a value that has not been seen
-          at <code>foo()</code> before. That is a coverage signal in exactly
-          the same sense as an edge &mdash; a cheap, per-execution, monotone
-          set of observations &mdash; and it is the signal the two modes in this
-          book produce.
+          input reached <code>ksmbd_vfs_write()</code> with a
+          <code>count</code> that has not been seen there before. That is a
+          coverage signal in exactly the same sense as an edge &mdash; a cheap,
+          per-execution, monotone set of observations &mdash; and it is the
+          signal the two modes in this book produce.
         </p>
       </section>
 
@@ -470,11 +507,12 @@
         <h3>A protocol the fuzzer already solved</h3>
 
         <p>
-          The concrete case that motivated the work is the SMB2 server in the
-          kernel. Reaching anything worth fuzzing requires a valid protocol
-          prefix: negotiate a dialect, set up a session, bind a share. Those
-          four exchanges are a fixed sequence, a fuzzer finds them quickly, and
-          once found they are the same edges on every subsequent input.
+          A single length field is a small instance of a larger problem with the
+          same shape. Reaching anything worth fuzzing in the SMB2 server
+          requires a valid protocol prefix: negotiate a dialect, set up a
+          session, bind a share. Those exchanges are a fixed sequence, a fuzzer
+          finds them quickly, and once found they are the same edges on every
+          subsequent input.
         </p>
 
         <figure class="plate">
@@ -489,13 +527,39 @@
 
         <p>
           What happens after the handshake is where the bugs are, and it is
-          driven by field values rather than by branch structure.
-          <code>DesiredAccess</code> in an <code>SMB2_CREATE</code> becomes
-          open flags several frames later. The permission combination that
-          trips a bug and the permission combination that does not take the
-          same path through the request parser. Edge coverage saturates; the
-          field keeps mattering.
+          driven by field values rather than by branch structure. The whole
+          protocol prefix is discovered in the first minutes and then
+          contributes nothing; from that point on, the only thing distinguishing
+          one request from another is the contents of its fields &mdash; the
+          length and offset of the previous section, a
+          <code>DesiredAccess</code> mask, a <code>CreateDisposition</code>, a
+          name, a create-context blob. Edge coverage saturates. The fields keep
+          mattering.
         </p>
+
+        <p>
+          <code>DesiredAccess</code> is the sharpest illustration, because its
+          effect is not even confined to the request that carries it.
+          <code>smb2_create_open_flags()</code> folds the mask down to a set of
+          open flags and never looks at
+          <code>FILE_WRITE_DAC</code> at all, so two
+          <code>SMB2_CREATE</code> requests differing in that one bit produce an
+          identical <code>open_flags</code> and an identical edge set. The bit
+          survives only in <code>fp-&gt;daccess</code> on the resulting handle,
+          where it is consulted thousands of lines away by a
+          <em>different</em> request:
+        </p>
+
+        <figure class="listing">
+          <pre><code>	if (!(fp-&gt;daccess &amp; (FILE_WRITE_DAC_LE | FILE_WRITE_OWNER_LE)))
+		return -EACCES;</code></pre>
+          <figcaption>
+            The only consumer of the bit, in
+            <code>smb2_set_info_sec()</code>. A fuzzer that discarded the
+            request carrying it never builds the handle that reaches this line.
+            <span class="src">fs/smb/server/smb2pdu.c:8579</span>
+          </figcaption>
+        </figure>
       </section>
 
       <section id="s-proposal">

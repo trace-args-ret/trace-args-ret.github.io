@@ -1,0 +1,10 @@
+flowchart TD
+    A["SMB2_CREATE (A)<br/>DesiredAccess = 0x00120116<br/>write data, append, EA, attrs"] --> M
+    B["SMB2_CREATE (B)<br/>DesiredAccess = 0x00160116<br/>= A | FILE_WRITE_DAC"] --> M
+    M["smb2_open()<br/>daccess = smb_map_generic_desired_access(...)"]
+    M --> F["smb2_create_open_flags(access = daccess, ...)<br/>nothing in it tests WRITE_DAC, so both<br/>take the same O_WRONLY branch"]
+    F --> O["open_flags = 0x8801 for both requests<br/>O_WRONLY | O_NONBLOCK | O_LARGEFILE"]
+    O --> D["dentry_open() → vfs_open()<br/>do_dentry_open() → security_file_open()"]
+    D --> S["daccess is stored on the open handle,<br/>where the difference outlives the request"]
+    S --> E["Edge coverage:<br/>one edge set for both requests,<br/>so B is discarded as uninteresting"]
+    S --> V["Value observation at the boundary:<br/>access = 0x00120116 and 0x00160116<br/>are two distinct observations"]
