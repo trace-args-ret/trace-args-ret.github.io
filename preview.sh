@@ -25,7 +25,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-host="${1:-127.0.0.1}"
+host="${1:-192.168.98.142}"
 port="${2:-13000}"
 stage="${TMPDIR:-/tmp}/fbvc-preview"
 

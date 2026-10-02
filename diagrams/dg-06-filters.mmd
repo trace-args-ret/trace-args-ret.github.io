@@ -1,7 +1,11 @@
 flowchart TD
-    A["#dbg_value record<br/>naming a parameter"] --> B{"from an inlined callee,<br/>or a #dbg_declare ?"}
-    B -->|"yes"| X1["ignored: not a description of<br/>this function's incoming value"]
-    B -->|"no"| D{"a complex DIExpression<br/>rather than the value itself ?"}
+    A["#dbg_value record<br/>naming a parameter"] --> F{"location inlined at<br/>a call site ?"}
+    F -->|"yes"| F1["routed to that frame:<br/>reported as the inlined<br/>callee's parameter"]
+    F -->|"no"| F2["the function's own frame"]
+    F1 --> B{"scoped to that frame's<br/>subprogram, and not<br/>a #dbg_declare ?"}
+    F2 --> B
+    B -->|"no"| X1["ignored: not a description of<br/>this frame's incoming value"]
+    B -->|"yes"| D{"a complex DIExpression<br/>rather than the value itself ?"}
     D -->|"yes"| X1
     D -->|"no"| E{"poison, or defined where it<br/>would not dominate the call ?"}
     E -->|"yes"| X2["parameter still reported,<br/>with size 0"]

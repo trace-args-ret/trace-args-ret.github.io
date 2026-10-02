@@ -1,0 +1,15 @@
+flowchart TD
+    S["caller(size, p)<br/>after mid and leaf<br/>were inlined into it"]
+    S --> F1["frame 1: caller<br/>InlinedAt = null"]
+    S --> F2["frame 2: mid<br/>InlinedAt = caller:20"]
+    S --> F3["frame 3: leaf<br/>InlinedAt = mid:15"]
+
+    F1 --> C1["trace_args x2<br/>at the entry block"]
+    F2 --> C2["trace_args x2<br/>in mid's range"]
+    F3 --> C3["trace_args x2<br/>in leaf's range"]
+
+    C1 --> R1["ra - 1 resolves to<br/>caller:19"]
+    C2 --> R2["ra - 1 resolves to<br/>mid:14, inlined at caller:20"]
+    C3 --> R3["ra - 1 resolves to<br/>leaf:9, inlined at mid:15,<br/>inlined at caller:20"]
+
+    F1 --> RET["trace_ret:<br/>frame 1 only"]

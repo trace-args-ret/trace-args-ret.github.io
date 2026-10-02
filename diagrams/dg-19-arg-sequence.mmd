@@ -1,0 +1,13 @@
+flowchart TD
+    SRC["submit(s, 42, token)<br/>three source parameters"]
+
+    SRC --> A0["__sanitizer_cov_trace_args<br/>arg_idx = 0, the parameter s<br/>size = 16, val = object address<br/>offsets = {0,4},{8,8}, num_fields = 2"]
+    A0 --> A1["__sanitizer_cov_trace_args<br/>arg_idx = 1, the parameter flags<br/>size = 4, val = 42<br/>offsets = NULL, num_fields = 0"]
+    A1 --> A2["__sanitizer_cov_trace_args<br/>arg_idx = 2, the parameter token<br/>size = 8, val = the pointer<br/>offsets = NULL, num_fields = 0"]
+    A2 --> BODY["the function body runs"]
+
+    N["all three at the frame's start,<br/>before any of the body"]
+    N -.- A0
+
+    M["one call per source parameter,<br/>whatever the ABI did to them:<br/>a hidden sret pointer takes no index,<br/>a register-split struct shares one"]
+    M -.- SRC

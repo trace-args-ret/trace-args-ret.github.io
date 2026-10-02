@@ -1,0 +1,13 @@
+flowchart LR
+    AR["__sanitizer_cov_trace_args<br/>(arg_idx, size, val,<br/>offsets, num_fields)"]
+    RT["__sanitizer_cov_trace_ret<br/>(size, val,<br/>offsets, num_fields)"]
+
+    AR -->|"arg_idx names the source<br/>parameter; one call per<br/>parameter, in order"| T
+    RT -->|"no index: one logical<br/>return value per frame"| T
+
+    T["the four<br/>shared fields"]
+
+    T --> E["nothing to report<br/>size = 0, val = 0<br/>offsets = NULL, num_fields = 0<br/>args: a parameter the optimizer dropped<br/>ret: a void function"]
+    T --> D["direct scalar<br/>size = 4, val = 42<br/>offsets = NULL, num_fields = 0<br/>the datum is already in the record;<br/>no memory is touched"]
+    T --> O["opaque pointer<br/>size = 8, val = the pointer<br/>offsets = NULL, num_fields = 0<br/>the pointer value itself is the datum;<br/>the pointee is never read"]
+    T --> S["struct with known layout<br/>size = 16, the whole object<br/>val = object address<br/>offsets = {0,4},{8,8}, num_fields = 2<br/>read those fields at val"]
