@@ -1,13 +1,17 @@
 flowchart TD
-    E["function entry block<br/>(the own frame)"] --> A0["trace_args(arg 0)"]
+    E["the own frame's start:<br/>EntryBB.getFirstInsertionPt()"] --> A0["trace_args(arg 0)"]
     A0 --> A1["trace_args(arg 1)"]
-    A1 --> IB["start of an inlined<br/>callee's body<br/>(a frame of its own)"]
+    A1 --> IB["an inlined frame's start:<br/>legalInsertionPt() inside the<br/>callee's instruction range"]
     IB --> C0["trace_args(arg 0)<br/>!dbg names the callee"]
     C0 --> BR{"branch"}
     BR --> B1["basic block A"]
     BR --> B2["basic block B"]
+    BR --> B3["basic block C"]
     B1 --> R1["trace_ret(...)<br/>ret"]
     B2 --> R2["trace_ret(...)<br/>ret"]
-    B2 --> MT["musttail call<br/>ret forwarding it"]
+    B3 --> MT["musttail call,<br/>and the ret forwarding it"]
     MT --> NI["not instrumented:<br/>call and ret must stay adjacent"]
     IB --> NR["no trace_ret:<br/>an inlined callee has no ret"]
+
+    N["a frame's calls can sit later than its start:<br/>pushed past every value they report,<br/>then clamped back by legalInsertionPt()"]
+    N -.- A0

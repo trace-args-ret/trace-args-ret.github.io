@@ -201,6 +201,7 @@
             <li><a href="#s-offsets">The field offset table</a></li>
             <li><a href="#s-bitfields">Bitfields, empty members, reuse</a></li>
             <li><a href="#s-opaque">Pointers with no known layout</a></li>
+            <li><a href="#s-nested">One level deep, and no types</a></li>
             <li><a href="#s-pieces">Aggregates the ABI put in registers</a></li>
             <li><a href="#s-sret">Structured returns</a></li>
           </ol>
@@ -729,18 +730,22 @@ void __sanitizer_cov_trace_ret(uint32_t size, uint64_t val, uint64_t *offsets,
       </p>
 
       <figure class="listing">
-        <pre><code>struct S { int a; long b; };            /* layout known: {0,4} {8,8} */
+        <pre><code>struct S   { int a; long b; };          /* 16 bytes, layout known: {0,4} {8,8} */
+struct Big { long x; long y; long z; }; /* 24 bytes: too large for registers   */
 
-void  submit(struct S *s, int flags, void *token);  /* void return      */
-struct S *lookup(struct S *tab, int id);            /* struct pointer   */
-int   flags_of(struct S *s);                        /* direct scalar    */
-void *opaque_of(struct S *s);                       /* opaque pointer   */</code></pre>
+void      submit(struct S *s, int flags, void *token); /* void return      */
+struct S *lookup(struct S *tab, int id);               /* struct pointer   */
+int       flags_of(struct S *s);                       /* direct scalar    */
+void     *opaque_of(struct S *s);                      /* opaque pointer   */
+struct Big make_big(int seed);                         /* sret object      */</code></pre>
         <figcaption>
-          Four declarations covering every shape the contract has. The IR
-          quoted further down is what
+          Five declarations covering every shape the contract has, the hidden
+          <code>sret</code> pointer included. The IR quoted further down is
+          what
           <code>clang -O1 -g -fno-inline
           -fsanitize-coverage=trace-pc-guard,trace-args,trace-ret</code>
-          emits for them, verbatim apart from elided function bodies.
+          emits for them, verbatim with function attributes trimmed and the
+          bodies elided.
         </figcaption>
       </figure>
 
@@ -845,29 +850,87 @@ __sanitizer_cov_trace_args(
       </figure>
 
       <figure class="listing">
-        <pre><code>@__sancov_offsets_ = private unnamed_addr constant [4 x i64] [i64 0, i64 4, i64 8, i64 8]
+        <pre><code>@__sancov_offsets_   = private unnamed_addr constant [4 x i64]
+                         [i64 0, i64 4, i64 8, i64 8]
+@__sancov_offsets_.5 = private unnamed_addr constant [6 x i64]
+                         [i64 0, i64 8, i64 8, i64 8, i64 16, i64 8]
 
 define void @submit(ptr %0, i32 %1, ptr %2) {
   %4 = ptrtoint ptr %0 to i64
-  call void @__sanitizer_cov_trace_args(i32 0, i32 16, i64 %4, ptr @__sancov_offsets_, i32 2)
+  call void @__sanitizer_cov_trace_args(i32 0, i32 16, i64 %4,
+                                        ptr @__sancov_offsets_, i32 2)
   %5 = zext i32 %1 to i64
-  call void @__sanitizer_cov_trace_args(i32 1, i32  4, i64 %5, ptr null, i32 0)
+  call void @__sanitizer_cov_trace_args(i32 1, i32 4, i64 %5, ptr null, i32 0)
   %6 = ptrtoint ptr %2 to i64
-  call void @__sanitizer_cov_trace_args(i32 2, i32  8, i64 %6, ptr null, i32 0)
+  call void @__sanitizer_cov_trace_args(i32 2, i32 8, i64 %6, ptr null, i32 0)
   ...
   call void @__sanitizer_cov_trace_ret(i32 0, i64 0, ptr null, i32 0)
   ret void
 }
 
-; lookup, flags_of, opaque_of: the three non-void returns, one per shape
-call void @__sanitizer_cov_trace_ret(i32 16, i64 %7, ptr @__sancov_offsets_, i32 2)
-call void @__sanitizer_cov_trace_ret(i32  4, i64 %4, ptr null, i32 0)
-call void @__sanitizer_cov_trace_ret(i32  8, i64 %6, ptr null, i32 0)</code></pre>
+define ptr @lookup(ptr %0, i32 %1) {
+  %3 = ptrtoint ptr %0 to i64
+  call void @__sanitizer_cov_trace_args(i32 0, i32 16, i64 %3,
+                                        ptr @__sancov_offsets_, i32 2)
+  %4 = zext i32 %1 to i64
+  call void @__sanitizer_cov_trace_args(i32 1, i32 4, i64 %4, ptr null, i32 0)
+  ...
+  %7 = ptrtoint ptr %6 to i64
+  call void @__sanitizer_cov_trace_ret(i32 16, i64 %7,
+                                       ptr @__sancov_offsets_, i32 2)
+  ret ptr %6
+}
+
+define i32 @flags_of(ptr %0) {
+  %2 = ptrtoint ptr %0 to i64
+  call void @__sanitizer_cov_trace_args(i32 0, i32 16, i64 %2,
+                                        ptr @__sancov_offsets_, i32 2)
+  ...
+  %4 = zext i32 %3 to i64
+  call void @__sanitizer_cov_trace_ret(i32 4, i64 %4, ptr null, i32 0)
+  ret i32 %3
+}
+
+define ptr @opaque_of(ptr %0) {
+  %2 = ptrtoint ptr %0 to i64
+  call void @__sanitizer_cov_trace_args(i32 0, i32 16, i64 %2,
+                                        ptr @__sancov_offsets_, i32 2)
+  ...
+  %6 = ptrtoint ptr %5 to i64
+  call void @__sanitizer_cov_trace_ret(i32 8, i64 %6, ptr null, i32 0)
+  ret ptr %5
+}
+
+define void @make_big(ptr sret(%struct.Big) %0, i32 %1) {
+  ; the sret pointer is not a source parameter, so `seed` keeps arg_idx 0
+  %3 = zext i32 %1 to i64
+  call void @__sanitizer_cov_trace_args(i32 0, i32 4, i64 %3, ptr null, i32 0)
+  ...
+  ; the IR returns void; the buffer is reported as the struct it holds
+  %11 = ptrtoint ptr %0 to i64
+  call void @__sanitizer_cov_trace_ret(i32 24, i64 %11,
+                                       ptr @__sancov_offsets_.5, i32 3)
+  ret void
+}</code></pre>
         <figcaption>
-          One table, three argument callbacks, four return callbacks. No
+          Two tables &mdash; one per struct type, interned and shared &mdash;
+          eight argument callbacks and five return callbacks. No
           <code>alloca</code> appears anywhere in the output.
         </figcaption>
       </figure>
+
+      <p>
+        Note what <code>make_big</code> shows that the other four cannot. Its
+        IR takes two arguments and returns <code>void</code>; the source takes
+        one and returns a struct. The argument callback reports
+        <code>seed</code> as <code>arg_idx&nbsp;0</code> rather than 1, because
+        the <code>sret</code> pointer has no source-level counterpart; the
+        return callback reports that same pointer as a 24-byte object with
+        three fields, so the return does not vanish. Both halves of that are
+        source fidelity chosen over ABI fidelity, and
+        <a class="xref" href="#s-sret">Section 4.6</a> is where the second
+        half is argued.
+      </p>
 
       <figure class="listing">
         <pre><code>__sanitizer_cov_trace_ret(
@@ -923,8 +986,8 @@ num_fields = 2
 /* -&gt; record the fields found at that address */</code></pre>
         <figcaption>
           <strong>Pointer to a struct whose layout is known.</strong>
-          Parameter&nbsp;0 of all four functions; the return of
-          <code>lookup</code>.
+          Parameter&nbsp;0 of the four functions that take a
+          <code>struct S *</code>; the return of <code>lookup</code>.
         </figcaption>
       </figure>
 
@@ -937,6 +1000,31 @@ num_fields = 2
         the one <code>@__sancov_offsets_</code> above. Reading the fields is
         the consumer's job and the consumer's risk, which is
         <a class="xref" href="#s-offsets">Section 4.1</a>.
+      </p>
+
+      <figure class="listing">
+        <pre><code>__sanitizer_cov_trace_ret(
+    24,                   /* size:       sizeof(struct Big)           */
+    (uint64_t)sret_buf,   /* val:        the caller-provided buffer   */
+    __sancov_offsets_.5,  /* offsets:    {0,8},{8,8},{16,8}           */
+    3                     /* num_fields: three fields to read at val  */
+);</code></pre>
+        <figcaption>
+          <strong>The same shape, reached the other way.</strong>
+          <code>make_big</code>, whose struct comes back through a
+          caller-provided buffer.
+        </figcaption>
+      </figure>
+
+      <p>
+        Not a fifth shape: it is the object-by-address shape again, and a
+        consumer decodes it with exactly the same branch. What differs is only
+        how the compiler arrived there. The IR function returns
+        <code>void</code>, so there is no return value to widen, and the pass
+        reports the <code>sret</code> argument instead &mdash; which means it
+        has to know the <em>declared</em> return type, the one debug query
+        <code>trace-ret</code> makes.
+        <a class="xref" href="#s-sret">Section 4.6</a> is the full case.
       </p>
 
       <figure class="listing">
@@ -972,10 +1060,11 @@ num_fields = 0
           turned out to have.
         </li>
         <li>
-          Hidden ABI arguments do not consume an index. For
-          <code>struct S f(int x)</code> lowered to
-          <code>void f(ptr sret, i32 x)</code>, <code>x</code> is
-          <code>arg_idx&nbsp;0</code> and not 1.
+          Hidden ABI arguments do not consume an index.
+          <code>make_big</code> above is the case: it is
+          <code>struct Big make_big(int seed)</code> lowered to
+          <code>void @make_big(ptr sret, i32 %1)</code>, and
+          <code>seed</code> is reported as <code>arg_idx&nbsp;0</code>, not 1.
         </li>
         <li>
           The index is per frame, not per function. After inlining, an
@@ -1007,9 +1096,10 @@ num_fields = 0
         <li>
           A struct returned by value through a caller-provided
           <code>sret</code> buffer is reported as an object: that buffer's
-          address, the source struct's size, its field table. The IR function
-          returns <code>void</code>, so without this the return would simply
-          vanish &mdash; <a class="xref" href="#s-sret">Section 4.5</a>.
+          address, the source struct's size, its field table &mdash;
+          <code>make_big</code> above. The IR function returns
+          <code>void</code>, so without this the return would simply
+          vanish &mdash; <a class="xref" href="#s-sret">Section 4.6</a>.
         </li>
         <li>
           A struct small enough to come back in registers has no address, so
@@ -1141,6 +1231,43 @@ num_fields = 0
         vector, or an aggregate the ABI passed in registers, returns
         <code>{nullptr, 0}</code> and becomes a <code>size == 0</code>
         observation.
+      </p>
+
+      <p>
+        That function is also the whole of the compiler-side value handling,
+        and seeing it as a pipeline makes the design principle in this
+        section's title checkable rather than merely stated. Every box below
+        is a cast:
+      </p>
+
+      <figure class="diagram">
+        <img src="img/dg-20-value-pipeline.svg" alt="A Value the pass already has - a debug record operand, an IR
+                 Argument or a ReturnInst operand - goes through
+                 getReportedValue(): a pointer becomes CreatePtrToInt, a number
+                 becomes CreateBitCast then CreateZExt or CreateTrunc, and
+                 anything else returns {nullptr, 0} and is reported with size 0.
+                 getReportedValues() splits a struct or array with
+                 CreateExtractValue first. No alloca, load or store is
+                 created." />
+        <figcaption>
+          The compiler side of &ldquo;values remain values&rdquo;:
+          <code>ptrtoint</code>, <code>bitcast</code>, <code>zext</code>,
+          <code>trunc</code>, <code>extractvalue</code>. Nothing that reads or
+          writes memory appears anywhere in it.
+        </figcaption>
+      </figure>
+
+      <p>
+        The input side of that pipeline is the part worth dwelling on: the
+        pass never produces a value, it only takes one the function already
+        computed. On the argument side that is the operand of a debug record,
+        or an <code>Argument</code> when there are no records; on the return
+        side it is <code>ReturnInst::getReturnValue()</code>, or the
+        <code>sret</code> argument when the IR signature returns nothing.
+        The aggregate split at the top is
+        <code>getReportedValues()</code>, and it exists because the elements
+        of a struct the ABI put in registers share no address &mdash;
+        <a class="xref" href="#s-pieces">Section 4.5</a>.
       </p>
 
       <p>
@@ -1339,7 +1466,7 @@ Interference usage of base pointer/frame pointer</code></pre>
       </p>
 
       <figure class="listing">
-        <pre><code>call void @__sanitizer_cov_trace_args(i32 1, i32 4, i64 %3, ptr null, i32 0)</code></pre>
+        <pre><code>call void @__sanitizer_cov_trace_args(i32 1, i32 4, i64 %1, ptr null, i32 0)</code></pre>
         <figcaption>
           A scalar second parameter of <code>two_params</code>, reported by
           value. Five arguments, no address computation, and nothing in the
@@ -1442,6 +1569,114 @@ Interference usage of base pointer/frame pointer</code></pre>
       numbering is the most intricate part of the instrumentation and the
       part with the least settled justification.
     </p>
+
+    <p>
+      Before any of it: what the LLVM-side patch actually consists of. Two
+      entry points, hung off <code>instrumentFunction()</code> after the
+      inliner has run, which between them reach every function the patch adds
+      to the pass. The argument side enumerates; the return side scans.
+    </p>
+
+    <figure class="diagram">
+      <img src="img/dg-21-pass-paths.svg" alt="instrumentFunction calls InjectTraceForArgs, which collects
+               inline frames from DebugLoc::getInlinedAt, routes debug records
+               to frames keyed by DILocalVariable::getArg, then for each frame
+               pushes the insertion point past every reported definition,
+               clamps it with legalInsertionPt, overrides the !dbg location and
+               emits one call per declared parameter. It also calls
+               InjectTraceForRet, which scans basic blocks for a ReturnInst,
+               skips a musttail call, and inserts before the return, reporting
+               the return value or the sret argument." />
+      <figcaption>
+        The two code paths of the pass. The argument chain is driven by debug
+        metadata; the return chain is driven by the IR's own control flow.
+      </figcaption>
+    </figure>
+
+    <p>
+      The asymmetry is the point. <code>trace-args</code> has to ask debug
+      metadata <em>what to report and how many times</em>, because the IR
+      argument list no longer answers either question. <code>trace-ret</code>
+      asks the IR directly &mdash; a <code>ReturnInst</code> is a
+      <code>ReturnInst</code> &mdash; and consults debug metadata only for the
+      declared return type, to build a field table. So the intricate half of
+      the patch is the half this chapter is about, and the other half is a
+      block scan.
+    </p>
+
+    <figure class="tabular">
+      <table class="compact">
+        <thead>
+          <tr>
+            <th>Callback operand</th>
+            <th>Where it comes from, on the LLVM side</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>arg_idx</code></td>
+            <td>
+              <code>DILocalVariable::getArg() - 1</code>, assigned by the
+              frontend before ABI lowering; positionally from
+              <code>F.args()</code> when there are no records
+            </td>
+          </tr>
+          <tr>
+            <td>how many calls</td>
+            <td>
+              <code>getNumDeclaredParams()</code>, the length of
+              <code>DISubroutineType</code>'s type array, widened to the
+              highest <code>getArg()</code> actually seen
+            </td>
+          </tr>
+          <tr>
+            <td><code>val</code></td>
+            <td>
+              a <code>Value</code> the function already computes: a debug
+              record's operand, an <code>Argument</code>, or
+              <code>ReturnInst::getReturnValue()</code> &mdash; cast, never
+              loaded
+            </td>
+          </tr>
+          <tr>
+            <td><code>size</code></td>
+            <td>
+              <code>DataLayout</code> for a pointer, the IR type's bit width
+              for a number, <code>DICompositeType::getSizeInBits()</code> for
+              an object reported by address
+            </td>
+          </tr>
+          <tr>
+            <td><code>offsets</code>, <code>num_fields</code></td>
+            <td>
+              <code>DW_TAG_member</code> entries of the parameter's or return
+              value's <code>DICompositeType</code>, interned per type
+            </td>
+          </tr>
+          <tr>
+            <td>which frame a call speaks for</td>
+            <td>
+              <code>DILocation::getInlinedAt()</code>, both to discover the
+              frame and to stamp the call's own <code>!dbg</code> so the
+              return address resolves to it
+            </td>
+          </tr>
+          <tr>
+            <td>where the call goes</td>
+            <td>
+              the IR: <code>getFirstInsertionPt()</code>, the dominance of
+              each reported definition, and the position of each
+              <code>ReturnInst</code>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <figcaption>
+        Every operand of both callbacks, and the query that produces it. Four
+        of the seven rows are debug metadata, which is why this chapter
+        exists.
+      </figcaption>
+    </figure>
 
     <section id="s-lowering">
       <h3>The signature the ABI leaves behind</h3>
@@ -1775,42 +2010,71 @@ entry:
         <code>getDeclaredReturnType()</code>, which reads
         <code>DISubprogram::getType()-&gt;getTypeArray()[0]</code> &mdash; and
         without it there is no field table, and for an indirect return no size
-        either:
+        either. This is the five functions of
+        <a class="xref" href="#s-two-callbacks">Section 2.1</a>, compiled
+        without <code>-g</code> and otherwise identically:
       </p>
 
       <figure class="listing">
-        <pre><code>; -sanitizer-coverage-trace-ret on IR carrying no !dbg at all
+        <pre><code>; clang -O1 -fno-inline
+;       -fsanitize-coverage=trace-pc-guard,trace-args,trace-ret
+; no @__sancov_offsets_ global is emitted at all
 
-define i32 @ret_scalar_no_debug(i32 %x)
-  ; unchanged
-  call void @__sanitizer_cov_trace_ret(i32 4, i64 %0, ptr null, i32 0)
+define void @make_big(ptr sret(%struct.Big) %0, i32 %1) {
+  ; the sret pointer is still skipped: `seed` keeps arg_idx 0 even here
+  call void @__sanitizer_cov_trace_args(i32 0, i32 4, i64 %3, ptr null, i32 0)
+  ; but the return is dropped: size 0, as for a void function
+  call void @__sanitizer_cov_trace_ret(i32 0, i64 0, ptr null, i32 0)
+}
 
-define ptr @ret_ptr_no_debug(ptr %s)
-  ; the pointer, not the object it points at
-  call void @__sanitizer_cov_trace_ret(i32 8, i64 %0, ptr null, i32 0)
+define void @submit(ptr %0, i32 %1, ptr %2) {
+  ; the struct pointer degrades to the pointer: 16 -> 8, table -> null
+  call void @__sanitizer_cov_trace_args(i32 0, i32 8, i64 %4, ptr null, i32 0)
+  call void @__sanitizer_cov_trace_args(i32 1, i32 4, i64 %5, ptr null, i32 0)
+  call void @__sanitizer_cov_trace_args(i32 2, i32 8, i64 %6, ptr null, i32 0)
+  call void @__sanitizer_cov_trace_ret(i32 0, i64 0, ptr null, i32 0)
+}
 
-define void @ret_sret_no_debug(ptr sret(%struct.Big) %0)
-  ; dropped: size 0, indistinguishable from a void function
-  call void @__sanitizer_cov_trace_ret(i32 0, i64 0, ptr null, i32 0)</code></pre>
+define ptr @lookup(ptr %0, i32 %1) {
+  call void @__sanitizer_cov_trace_args(i32 0, i32 8, i64 %3, ptr null, i32 0)
+  call void @__sanitizer_cov_trace_args(i32 1, i32 4, i64 %4, ptr null, i32 0)
+  ; the object return degrades the same way: 16 -> 8
+  call void @__sanitizer_cov_trace_ret(i32 8, i64 %7, ptr null, i32 0)
+}
+
+define i32 @flags_of(ptr %0) {
+  call void @__sanitizer_cov_trace_args(i32 0, i32 8, i64 %2, ptr null, i32 0)
+  ; a scalar return is unaffected
+  call void @__sanitizer_cov_trace_ret(i32 4, i64 %4, ptr null, i32 0)
+}
+
+define ptr @opaque_of(ptr %0) {
+  call void @__sanitizer_cov_trace_args(i32 0, i32 8, i64 %2, ptr null, i32 0)
+  ; an opaque pointer was already shapeless: unaffected
+  call void @__sanitizer_cov_trace_ret(i32 8, i64 %6, ptr null, i32 0)
+}</code></pre>
         <figcaption>
-          The three return strategies of
-          <a class="xref" href="#s-sret">Section 4.5</a>, built without
-          <code>-g</code>.
+          The same translation unit without <code>-g</code>. Both tables are
+          gone, and with them one return value.
         </figcaption>
       </figure>
 
       <p>
-        A scalar return is unaffected. A pointer return degrades the way a
-        pointer argument does, to the pointer's own value. An indirect struct
-        return becomes <code>size&nbsp;==&nbsp;0</code> &mdash;
-        indistinguishable from a <code>void</code> function &mdash; because the
-        buffer is a struct in memory rather than a value that fits in a
-        register, and with no declared type there is nothing to say how much of
-        it to read. The argument side has no equivalent: it still reports every
-        parameter the IR declares. There is no
-        <code>trace-ret-no-debug.ll</code>, so this is current behaviour rather
-        than agreed behaviour, and it belongs in
-        <a class="xref" href="#s-q-shape">Section 11.2</a>.
+        Four things to read out of that. <code>make_big</code>'s return becomes
+        <code>size&nbsp;==&nbsp;0</code>, because the buffer is a struct in
+        memory rather than a value that fits in a register, and with no declared
+        type there is nothing to say how much of it to read. Its
+        <code>sret</code> pointer is nevertheless still skipped, so
+        <code>arg_idx</code> numbering survives with no debug information at
+        all &mdash; that part never depended on it. Every
+        <code>struct S *</code> argument and the <code>lookup</code> return
+        fall back from a 16-byte object to an 8-byte pointer, the degradation
+        this section opened with. And a scalar return and an opaque pointer are
+        untouched, because neither ever needed a type. The argument side has no
+        equivalent of the dropped return: it still reports every parameter the
+        IR declares. There is no <code>trace-ret-no-debug.ll</code>, so the
+        dropped case is current behaviour rather than agreed behaviour, and it
+        belongs in <a class="xref" href="#s-q-shape">Section 11.2</a>.
       </p>
 
       <aside class="detail">
@@ -2011,6 +2275,299 @@ define void @ret_sret_no_debug(ptr sret(%struct.Big) %0)
       </aside>
     </section>
 
+    <section id="s-nested">
+      <h3>One level deep, and no types</h3>
+
+      <p>
+        The table describes a struct's members. It does not describe
+        <em>their</em> members, and it does not say what any of them is.
+        Neither limit is an oversight; both follow from the table being a flat
+        array of <code>{byte offset, byte size}</code> pairs. Together they
+        are the sharpest restriction on structured values, and they are easiest
+        to see in a struct that has one of everything:
+      </p>
+
+      <figure class="listing">
+        <pre><code>struct inner { int a; int b; };
+
+struct outer {
+	char c;			/* 1 byte  */
+	int i;			/* 4 bytes */
+	double d;		/* 8 bytes */
+	struct inner nested;	/* 8 bytes, inline */
+	struct inner *heap;	/* 8 bytes, pointer to a dynamic object */
+	void *opaque;		/* 8 bytes, no layout */
+	long l;			/* 8 bytes */
+};				/* 48 bytes */
+
+void take(struct outer *o);
+struct inner *give(struct outer *o);</code></pre>
+        <figcaption>
+          Seven members, five of them eight bytes wide.
+        </figcaption>
+      </figure>
+
+      <figure class="listing">
+        <pre><code>@__sancov_offsets_ = private unnamed_addr constant [14 x i64]
+                       [i64 0,  i64 1,     ; c
+                        i64 4,  i64 4,     ; i
+                        i64 8,  i64 8,     ; d
+                        i64 16, i64 8,     ; nested
+                        i64 24, i64 8,     ; heap
+                        i64 32, i64 8,     ; opaque
+                        i64 40, i64 8]     ; l
+
+call void @__sanitizer_cov_trace_args(i32 0, i32 48, i64 %2,
+                                      ptr @__sancov_offsets_, i32 7)</code></pre>
+        <figcaption>
+          <code>take</code>'s parameter, as the compiler describes it. The
+          member comments are mine; nothing in the table names a field or says
+          what kind of thing it is.
+        </figcaption>
+      </figure>
+
+      <p>
+        Fields 2 through 6 are all <code>{offset,&nbsp;8}</code>: a
+        <code>double</code>, an inline eight-byte struct, a pointer to a heap
+        object, an opaque pointer, and a <code>long</code>. Five different
+        source types, one indistinguishable description. <code>c</code> and
+        <code>i</code> are the only members whose size tells a consumer
+        anything, and only because 1 and 4 are rarer widths than 8.
+      </p>
+
+      <h4>Why one level</h4>
+
+      <p>
+        The member loop of
+        <a class="xref" href="#s-bitfields">Section 4.2</a> never calls back
+        into itself: a member whose type is a
+        composite contributes one pair describing the whole of it, exactly as
+        a scalar member does. And the only place a pointer is followed is at
+        the top:
+      </p>
+
+      <figure class="listing">
+        <pre><code>static DICompositeType *getTracedStructType(DIType *Ty) {
+  Ty = stripTypedefsAndQualifiers(Ty);
+  if (auto *Derived = dyn_cast_or_null&lt;DIDerivedType&gt;(Ty))
+    if (Derived-&gt;getTag() == dwarf::DW_TAG_pointer_type)
+      Ty = stripTypedefsAndQualifiers(Derived-&gt;getBaseType());
+  ...</code></pre>
+        <figcaption>
+          One <code>if</code>, not a loop. <code>struct outer *</code> is
+          described; <code>struct outer **</code> is not.
+          <span class="src">SanitizerCoverage.cpp, <code>getTracedStructType()</code></span>
+        </figcaption>
+      </figure>
+
+      <p>
+        So <code>outer.heap</code> is never asked about at all. The irony is
+        that the answer is already in the module. Because
+        <code>give()</code> returns <code>struct inner *</code>, the same
+        translation unit emits:
+      </p>
+
+      <figure class="listing">
+        <pre><code>@__sancov_offsets_.1 = private unnamed_addr constant [4 x i64]
+                         [i64 0, i64 4, i64 4, i64 4]   ; struct inner
+
+call void @__sanitizer_cov_trace_ret(i32 8, i64 %5,
+                                     ptr @__sancov_offsets_.1, i32 2)</code></pre>
+        <figcaption>
+          <code>struct inner</code>'s layout, interned a few bytes away in
+          <code>.rodata</code>. Nothing links <code>outer</code>'s fifth field
+          to it.
+        </figcaption>
+      </figure>
+
+      <h4>What the record keeps, and what it drops</h4>
+
+      <p>
+        The flat table is the compiler's view. A consumer sees less, because
+        the kernel reads the table itself and the table does not travel:
+      </p>
+
+      <figure class="listing">
+        <pre><code>			if (sz &gt; sizeof(fval))
+				sz = sizeof(fval);
+			if (copy_from_kernel_nofault(&amp;fval, fa, sz))
+				fval = KCOV_DF_MAGIC_BAD;
+			area[start_index + 3 + i] = fval;</code></pre>
+        <figcaption>
+          One <code>u64</code> per field, zero-extended.
+          <span class="src">kernel/kcov_dataflow.c:525</span>
+        </figcaption>
+      </figure>
+
+      <p>
+        A record is header, <code>pc</code>, object address, then
+        <code>nvals</code> value words &mdash;
+        <code>KCOV_DF_RECORD_WORDS()</code>. The offsets and sizes stay in
+        kernel <code>.rodata</code>. So even the
+        <code>{0,&nbsp;1}</code>-versus-<code>{4,&nbsp;4}</code> distinction
+        that the compiler <em>did</em> record never reaches user space, which
+        is why <code>trigger-view.py</code> can only print
+        <code>{f0,&nbsp;f1,&nbsp;&hellip;}</code> and why
+        <a class="xref" href="#s-viewer">Section 10.3</a> cannot do better.
+      </p>
+
+      <aside class="warn">
+        <span class="label">Two losses with nothing to flag them</span>
+        <p>
+          An inline member wider than eight bytes is truncated to its first
+          eight. The compiler records the true width &mdash;
+          <code>struct holder { int tag; struct wide w; }</code>, where
+          <code>struct wide</code> is two <code>long</code>s, yields
+          <code>[i64 0, i64 4, i64 8, i64 16]</code> &mdash; and the clamp
+          above keeps only <code>w.a</code>. Separately,
+          <code>KCOV_DF_HDR_SIZE_MASK</code> is <code>0xFF</code>, so an
+          object larger than 255 bytes reports a clamped
+          <code>size</code> in its header. Neither case sets a flag, and
+          neither is distinguishable from a correct record.
+        </p>
+      </aside>
+
+      <h4>What a consumer can do today</h4>
+
+      <dl>
+        <dt>An inline member of eight bytes or fewer</dt>
+        <dd>
+          The data is there, packed into one <code>u64</code>. Unpack it by
+          hand, knowing the type from outside the record. Structure lost, data
+          kept.
+        </dd>
+
+        <dt>A pointer member</dt>
+        <dd>
+          The address, and nothing else. Following it is precisely the read
+          the instrumentation refuses to make
+          (<a class="xref" href="#s-opaque">Section 4.3</a>): nothing in
+          <code>struct inner *</code> says the address is readable, that it
+          points at one <code>inner</code> rather than none, or that the
+          object is still alive. The kernel's read of the <em>outer</em>
+          object is already <code>copy_from_kernel_nofault</code> for the same
+          reason.
+        </dd>
+
+        <dt>Offline, outside the contract</dt>
+        <dd>
+          Word&nbsp;[1] of the record is the call site, so
+          <code>addr2line -i</code> plus the binary's own DWARF &mdash; or
+          <code>pahole</code> on <code>vmlinux</code> &mdash; recovers the
+          parameter's declared type and therefore every member's type and
+          every nested layout. This is post-processing, it needs the matching
+          build, and the viewer does not do it.
+        </dd>
+      </dl>
+
+      <h4>What <code>offsets</code> already carries</h4>
+
+      <p>
+        <code>offsets</code> <em>is</em> the table: a pointer into the
+        instrumented module's <code>.rodata</code>, holding
+        <code>2&nbsp;&times;&nbsp;num_fields</code> words laid out
+        <code>{off0, size0, off1, size1, &hellip;}</code>. The array carries
+        no length of its own &mdash; <code>num_fields</code> is the length.
+        Both consumers index it the same way:
+      </p>
+
+      <figure class="listing">
+        <pre><code>/* kernel: kcov_dataflow.c */
+copy_from_kernel_nofault(&amp;off, &amp;offsets[i * 2],     sizeof(off));
+copy_from_kernel_nofault(&amp;sz,  &amp;offsets[i * 2 + 1], sizeof(sz));
+
+/* libFuzzer: FuzzerTracePC.cpp */
+uint64_t Bytes = Offsets[I * 2 + 1];
+if (Bytes &gt; sizeof(uint64_t))
+  Bytes = sizeof(uint64_t);
+__builtin_memcpy(&amp;Field, Object + Offsets[I * 2], Bytes);</code></pre>
+        <figcaption>
+          The same two reads per field, in both runtimes. Note that libFuzzer
+          clamps to eight bytes independently of the kernel, and separately
+          caps the loop at <code>kMaxDataflowFields</code>&nbsp;=&nbsp;32.
+        </figcaption>
+      </figure>
+
+      <p>
+        So the per-field offset and size are fully available <em>to a
+        consumer</em>; a userspace runtime holds the whole table in-process
+        and may read all of it. What the kernel loses is not access but
+        forwarding: <code>kcov_df_write()</code> spends the table and keeps
+        only the values. And the eight-byte clamp is a convention both
+        consumers chose, not a kernel quirk &mdash; which also means a struct
+        member wider than eight bytes is truncated for libFuzzer too.
+      </p>
+
+      <h4>What closing it would take, and who owns each part</h4>
+
+      <p>
+        Five gaps, and they do not all live on the same side of the callback.
+        Three need no compiler change at all, because the information is
+        already in <code>offsets</code> and only the kernel's record format
+        drops it:
+      </p>
+
+      <ul>
+        <li>
+          <strong>Kernel and UAPI.</strong> Forward the per-field offsets and
+          sizes into the record instead of consuming them, so a userspace
+          reader can tell <code>{0,&nbsp;1}</code> from
+          <code>{4,&nbsp;4}</code>. Costs record space per observation,
+          against a buffer that
+          <a class="xref" href="#s-header">Section 7.2</a> already shows
+          running close to full.
+        </li>
+        <li>
+          <strong>Kernel.</strong> Stop silently truncating a member wider
+          than eight bytes &mdash; emit more than one word for it, or flag it.
+          The true width is already in the table.
+        </li>
+        <li>
+          <strong>UAPI.</strong> Widen the header's <code>size</code> field
+          past its eight bits, or state that it saturates.
+        </li>
+      </ul>
+
+      <p>
+        The other two cannot be fixed downstream, because the information is
+        not in <code>offsets</code> in the first place. Only DWARF has it, and
+        neither consumer has DWARF at the moment the callback fires:
+      </p>
+
+      <ul>
+        <li>
+          <strong>Compiler, and therefore the ABI.</strong> A per-field
+          <em>kind</em> &mdash; integer, float, pointer, aggregate &mdash; so
+          that eight bytes stops being ambiguous. Costs a third word per
+          field, or spare bits in the size, and changes the table's shape for
+          every existing consumer.
+        </li>
+        <li>
+          <strong>Compiler, and therefore the ABI.</strong> A link from an
+          aggregate field to that aggregate's own table, which makes
+          <code>offsets</code> a tree rather than an array and the decode a
+          walk rather than a loop. This also forces a decision the prototype
+          has never had to make: a depth limit, and a policy for pointer
+          members, since following one is an unbounded faultable read of
+          attacker-influenced memory from instrumentation context &mdash; a
+          different risk from reading a field of an object the caller handed
+          over.
+        </li>
+      </ul>
+
+      <p>
+        The division is worth stating because it sets the order of work. The
+        three kernel-side items are local, compatible changes to a format that
+        is not yet anyone's stable ABI. The two compiler-side items change
+        what every runtime must understand, cost <code>.rodata</code> per
+        struct type, and would be hard to retract. Whether a dataflow signal
+        needs the depth at all, or whether one level of fields is the useful
+        stopping point, is the open question in
+        <a class="xref" href="#s-q-shape">Section 11.2</a> &mdash; and today
+        it is an accident of the format rather than a decision.
+      </p>
+    </section>
+
     <section id="s-pieces">
       <h3>Aggregates the ABI put in registers</h3>
 
@@ -2175,7 +2732,7 @@ define void @ret_sret_no_debug(ptr sret(%struct.Big) %0)
         the start of each <em>frame</em> &mdash; the function's own body, and
         then each callee the inliner merged into it &mdash; as early as the
         values it reports permit. For the function's own frame that start is
-        the entry block, as it always was.
+        the entry block's first insertion point, as it always was.
         &ldquo;As early as permitted&rdquo; is not the same as
         &ldquo;first instruction&rdquo;: a value has to be defined before it
         can be reported, and the dominance filter in
@@ -2199,15 +2756,18 @@ define void @ret_sret_no_debug(ptr sret(%struct.Big) %0)
       </figure>
 
       <figure class="diagram">
-        <img src="img/dg-16-placement.svg" alt="Argument callbacks are placed at the start of each frame: the
-                 function's own entry block, and the first instruction of each
-                 inlined callee's body; return callbacks go before each
-                 instrumentable return in every block that returns; a return
-                 forwarding a musttail call is not instrumented." />
+        <img src="img/dg-16-placement.svg" alt="Argument callbacks are placed at the start of each frame: the own
+                 frame's start is EntryBB.getFirstInsertionPt(), an inlined
+                 frame's is legalInsertionPt() inside the callee's instruction
+                 range, and either can be pushed later past the values it
+                 reports. Return callbacks go before each instrumentable return
+                 in every block that returns; a return forwarding a musttail
+                 call is not instrumented." />
         <figcaption>
           One <code>trace_args</code> per reported parameter at the start of
-          each frame; one <code>trace_ret</code> per instrumentable return,
-          wherever the returns are.
+          each frame &mdash; a point, not a block &mdash; and one
+          <code>trace_ret</code> per instrumentable return, wherever the
+          returns are.
         </figcaption>
       </figure>
 
@@ -2303,7 +2863,7 @@ define void @ret_sret_no_debug(ptr sret(%struct.Big) %0)
         <code>func,trace-args</code>,
         <code>bb,trace-args</code> and
         <code>edge,trace-args</code> emit exactly one
-        <code>trace_args</code> call per parameter, in the entry block.
+        <code>trace_args</code> call per parameter, at each frame's start.
         Changing the level moves the other mechanisms, not these.
       </p>
 
@@ -4652,7 +5212,7 @@ piece_B = foo()</code></pre>
 
       <p>
         The root cause is the missing piece framing from
-        <a class="xref" href="#s-pieces">Section 4.4</a>. Two consecutive
+        <a class="xref" href="#s-pieces">Section 4.5</a>. Two consecutive
         <code>RET</code> records from one call site cannot be
         <em>confirmed</em> to be pieces of one return: they could equally be a
         return followed by another call to the same function, or recursion. No
@@ -4888,7 +5448,7 @@ piece_B = foo()</code></pre>
       <h3>The shape of the callback</h3>
 
       <p>
-        Four representation questions, in descending order of how likely they
+        Six representation questions, in descending order of how likely they
         are to come up:
       </p>
 
@@ -4899,6 +5459,23 @@ piece_B = foo()</code></pre>
           field count. That keeps the signature small and couples two
           meanings. A separate discriminator, or a flags word, is the
           alternative.
+        </dd>
+
+        <dt>Should a field describe what it is, and what it contains?</dt>
+        <dd>
+          <code>{byte offset, byte size}</code> carries no type and does not
+          nest, so five members of eight bytes &mdash; a <code>double</code>,
+          an inline struct, a pointer to a known struct, an opaque pointer, a
+          <code>long</code> &mdash; arrive identically described, and a
+          member that is itself a struct arrives as one opaque blob whose own
+          layout the module already holds
+          (<a class="xref" href="#s-nested">Section 4.4</a>). A per-field
+          kind, and a link from an aggregate field to that aggregate's table,
+          would fix both; they also turn the decode from a loop into a walk,
+          cost <code>.rodata</code> per struct type, and raise the question
+          of how deep an instrumentation ABI should be willing to read. One
+          level may well be the right stopping point &mdash; but it is
+          currently an accident of the format rather than a decision.
         </dd>
 
         <dt>Is <code>uint64_t</code> enough?</dt>
@@ -5100,6 +5677,18 @@ seq 102  ARG  foo+0x12  val=1     seq 105  RET  foo+0x4e  val=6</code></pre>
           implementation clamps rather than truncates, which avoids the
           collision with &ldquo;unavailable&rdquo;, but the true size is
           unrecoverable and untested.
+        </li>
+        <li>
+          <strong>A spent field table.</strong>
+          <code>kcov_df_write()</code> reads the compiler's
+          <code>{offset,&nbsp;size}</code> pairs and writes only the values, so
+          a userspace reader receives <code>nvals</code> opaque words: it
+          cannot tell a one-byte field from a four-byte one, and an inline
+          member wider than eight bytes has been silently truncated to its
+          first eight. Forwarding the pairs is a kernel-side change that needs
+          no compiler work at all &mdash;
+          <a class="xref" href="#s-nested">Section 4.4</a> &mdash; and costs
+          record space against a buffer already running close to full.
         </li>
         <li>
           <strong>24-bit sequence.</strong> Modulo-2<sup>24</sup>, or reset on
@@ -6333,7 +6922,7 @@ npx vivliostyle build index.html -o function-boundary-value-coverage.pdf</code><
 
     <p>
       This book is one HTML file, one stylesheet, four raster plates and
-      nineteen SVG diagrams. There is no JavaScript at read time and no web
+      twenty-one SVG diagrams. There is no JavaScript at read time and no web
       font. Pagination, running heads, table-of-contents page numbers,
       footnotes and cross-reference page references are produced by
       <a href="https://vivliostyle.org/">Vivliostyle</a> from CSS Paged Media,

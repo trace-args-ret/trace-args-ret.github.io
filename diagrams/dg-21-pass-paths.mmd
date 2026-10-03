@@ -1,0 +1,22 @@
+flowchart TD
+    E["instrumentFunction(F)<br/>after the inliner"]
+
+    E -->|"Options.TraceArgs"| A1["InjectTraceForArgs(F, DT)"]
+    E -->|"Options.TraceRet"| R1["InjectTraceForRet(F)"]
+
+    A1 --> A2["collectInlineFrames(): frame 0 is F's own body,<br/>starting at EntryBB.getFirstInsertionPt()"]
+    A2 --> A3["walk every instruction's DebugLoc::getInlinedAt():<br/>one further frame per distinct call site,<br/>outermost first"]
+    A3 --> A4["walk every DbgVariableRecord:<br/>route to a frame by getInlinedAt(),<br/>key by DILocalVariable::getArg()"]
+    A4 --> A5["injectTraceForFrame(), once per frame"]
+    A5 --> A6["push the insertion point past every reported<br/>definition in the block, then clamp back<br/>with legalInsertionPt()"]
+    A6 --> A7["replace the synthetic !dbg with the frame's own:<br/>DILocation(SP-&gt;getScopeLine(), SP, InlinedAt)"]
+    A7 --> A8["for Idx = 1 .. max(getNumDeclaredParams(SP),<br/>highest getArg() seen): emit one call,<br/>size 0 where the parameter has no usable value"]
+
+    R1 --> R2["for each BasicBlock: is the terminator<br/>a ReturnInst? unwinding carries no value"]
+    R2 --> R3["is the node before it a musttail call?<br/>then skip: it must stay adjacent to the ret"]
+    R3 --> R4["insert immediately before the ReturnInst"]
+    R4 --> R5["report RI-&gt;getReturnValue(), or the sret<br/>Argument when the IR signature returns void"]
+    R5 --> R6["one call per return site, F's own frame only"]
+
+    NR["no frame walk here: an inlined callee has<br/>no ReturnInst left, and no debug record<br/>describes a return value"]
+    NR -.- R1

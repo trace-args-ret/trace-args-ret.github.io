@@ -1,0 +1,18 @@
+flowchart TD
+    V["a Value the pass already has:<br/>a debug record operand,<br/>an IR Argument,<br/>or a ReturnInst operand"]
+
+    V --> RV["getReportedValue()"]
+
+    RV -->|"pointer"| PT["CreatePtrToInt<br/>size = pointer size"]
+    RV -->|"number"| NUM["CreateBitCast if float,<br/>then CreateZExt,<br/>or CreateTrunc to i64<br/>above 64 bits<br/>size = ceil(bits / 8)"]
+    RV -->|"neither"| NR["vector, token, or an<br/>in-register aggregate:<br/>return {nullptr, 0}"]
+
+    PT --> OUT["val and size<br/>for the callback"]
+    NUM --> OUT
+    NR --> ZERO["size = 0:<br/>no value reported"]
+
+    AGG["getReportedValues() splits a<br/>struct or array first, with<br/>CreateExtractValue: the<br/>elements share no address,<br/>so each gets its own callback"]
+    AGG -.- RV
+
+    N["no alloca, no load, no store:<br/>every step above is a cast"]
+    N -.- OUT
